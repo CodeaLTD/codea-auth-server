@@ -1,0 +1,37 @@
+# Django Authentication Server Requirements
+# Core Django framework
+Django==5.2.7
+
+# System monitoring and metrics
+psutil==5.9.8
+
+# Database (SQLite is included with Python, but for production you might want PostgreSQL)
+# psycopg2-binary==2.9.9  # Uncomment for PostgreSQL support
+
+# Development and testing (optional)
+# pytest==7.4.3
+# pytest-django==4.7.0
+# coverage==7.3.2
+
+# Production server (optional)
+# gunicorn==21.2.0
+# uvicorn==0.24.0  # For ASGI support
+
+# Security and authentication
+django-cors-headers==4.3.1  # For CORS support
+djangorestframework==3.14.0  # For REST API framework
+djangorestframework-simplejwt==5.3.0  # For JWT authentication
+
+# API Documentation
+drf-spectacular==0.26.5  # For Swagger/OpenAPI documentation
+
+# Environment management (optional)
+# python-decouple==3.8  # For environment variables
+# django-environ==0.11.2  # Alternative environment management
+
+# Logging and monitoring (optional)
+# sentry-sdk==1.38.0  # For error tracking
+# django-extensions==3.2.3  # For additional Django management commands
+
+# Google auth
+requests
