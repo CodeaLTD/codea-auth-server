@@ -3,23 +3,24 @@ URL configuration for the Codea Auth Server API.
 
 This module defines all API endpoints organized by functionality.
 """
-
+from django.http import HttpResponse
 from django.urls import path
 from codea_auth_server.api import auth_views, user_views, health_views, docs_views, google_auth_views
 
 # API URL patterns organized by functionality
 urlpatterns = [
+    # Google OAuth Authentication endpoints
+    path('auth/google/login/', google_auth_views.google_login_view, name='api_google_login'),
+    path('auth/google/auth/', google_auth_views.google_auth_callback_view, name='api_google_auth'),
+    path('auth/google/me/', google_auth_views.google_me_view, name='api_google_me'),
+    path('auth/google/logout/', google_auth_views.google_logout_view, name='api_google_logout'),
+    path('auth/google/refresh/', google_auth_views.google_refresh_view, name='api_google_refresh'),
+    
     # JWT Authentication endpoints (recommended)
     path('auth/jwt/login/', auth_views.jwt_login_view, name='api_jwt_login'),
     path('auth/jwt/refresh/', auth_views.jwt_refresh_view, name='api_jwt_refresh'),
     path('auth/jwt/verify/', auth_views.jwt_verify_view, name='api_jwt_verify'),
     path('auth/jwt/logout/', auth_views.jwt_logout_view, name='api_jwt_logout'),
-    
-    # Google OAuth Authentication endpoints
-    path('auth/google/url/', google_auth_views.google_auth_url_view, name='api_google_auth_url'),
-    path('auth/google/callback/', google_auth_views.google_auth_callback_view, name='api_google_auth_callback'),
-    path('auth/google/config/', google_auth_views.google_auth_config_view, name='api_google_auth_config'),
-    path('auth/google/status/', google_auth_views.google_auth_status_view, name='api_google_auth_status'),
     
     # Legacy Authentication endpoints (deprecated)
     # path('auth/login/', auth_views.jwt_login_view, name='api_login'),
@@ -30,6 +31,7 @@ urlpatterns = [
     # User management endpoints
     path('users/register/', user_views.register_view, name='api_register'),
     path('users/profile/', user_views.profile_view, name='api_profile'),
+    path('users/profile/by-username/', user_views.get_user_profile_by_username_view, name='api_profile_by_username'),
     path('users/profile/update/', user_views.update_profile_view, name='api_update_profile'),
     path('users/profile/delete/', user_views.delete_profile_view, name='api_delete_profile'),
     path('users/list/', user_views.user_list_view, name='api_user_list'),

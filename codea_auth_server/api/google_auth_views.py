@@ -1,32 +1,51 @@
 """
 Google OAuth Authentication API views for the Codea Auth Server.
 
-This module handles Google OAuth authentication including:
-- Google OAuth URL generation
-- Google OAuth callback handling
-- User creation/authentication via Google
-- JWT token generation for Google-authenticated users
+This module handles Google OAuth authentication with 5 endpoints:
+1. `/login` - Redirects to Google login
+2. `/auth` - Callback that exchanges code for tokens, fetches user info, issues JWT
+3. `/me` - Protected endpoint (requires Bearer or cookie)
+4. `/logout` - Deletes token
+5. `/refresh` - Refreshes JWT access token using refresh token
+"""
+"""
+💾 Real-world improvements
+
+If you integrate into production:
+
+Store refresh tokens in your User model, encrypted (e.g., with Django’s Fernet).
+
+Add a last_refresh field for auditing.
+
+Rotate tokens regularly.
+
+Handle revoked Google tokens by catching invalid_grant responses.
+
+Consider refreshing Google access tokens automatically in background if you call Google APIs.
 """
 
 import requests
 import json
 import time
 import logging
-from django.http import JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from drf_spectacular.types import OpenApiTypes
 
 from codea_auth_server.logging_utils import log_auth_event, log_security_event, log_request_info, log_error, log_message
+from .role_utils import get_user_roles
+from .google_token_utils import store_google_token, get_stored_refresh_token, handle_revoked_token, refresh_google_access_token
 
 # Get logger for this module
 logger = logging.getLogger('codea_auth_server')
@@ -35,7 +54,7 @@ logger = logging.getLogger('codea_auth_server')
 GOOGLE_CONFIG = getattr(settings, 'GOOGLE_OAUTH_CONFIG', {})
 GOOGLE_CLIENT_ID = GOOGLE_CONFIG.get('CLIENT_ID', 'your-google-client-id')
 GOOGLE_CLIENT_SECRET = GOOGLE_CONFIG.get('CLIENT_SECRET', 'your-google-client-secret')
-GOOGLE_REDIRECT_URI = GOOGLE_CONFIG.get('REDIRECT_URI', 'http://localhost:8000/api/auth/google/callback/')
+GOOGLE_REDIRECT_URI = GOOGLE_CONFIG.get('REDIRECT_URI', 'http://localhost:8000/api/auth/google/auth/')
 GOOGLE_SCOPE = GOOGLE_CONFIG.get('SCOPE', 'openid email profile')
 GOOGLE_AUTH_URL = GOOGLE_CONFIG.get('AUTH_URL', 'https://accounts.google.com/o/oauth2/v2/auth')
 GOOGLE_TOKEN_URL = GOOGLE_CONFIG.get('TOKEN_URL', 'https://oauth2.googleapis.com/token')
@@ -44,8 +63,8 @@ GOOGLE_USER_INFO_URL = GOOGLE_CONFIG.get('USER_INFO_URL', 'https://www.googleapi
 
 @extend_schema(
     tags=['Authentication'],
-    summary='Get Google OAuth URL',
-    description='Generate Google OAuth authorization URL for user authentication',
+    summary='Google OAuth Login',
+    description='Redirects to Google OAuth login page',
     parameters=[
         OpenApiParameter(
             name='redirect_uri',
@@ -54,25 +73,10 @@ GOOGLE_USER_INFO_URL = GOOGLE_CONFIG.get('USER_INFO_URL', 'https://www.googleapi
             description='Redirect URI after Google authentication',
             required=False
         ),
-        OpenApiParameter(
-            name='state',
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-            description='State parameter for CSRF protection',
-            required=False
-        )
     ],
     responses={
-        200: {
-            'description': 'Google OAuth URL generated successfully',
-            'content': {
-                'application/json': {
-                    'example': {
-                        'auth_url': 'https://accounts.google.com/o/oauth2/v2/auth?client_id=...',
-                        'state': 'random_state_string'
-                    }
-                }
-            }
+        302: {
+            'description': 'Redirects to Google OAuth login page',
         },
         500: {
             'description': 'Internal server error',
@@ -86,17 +90,17 @@ GOOGLE_USER_INFO_URL = GOOGLE_CONFIG.get('USER_INFO_URL', 'https://www.googleapi
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
-def google_auth_url_view(request):
+def google_login_view(request):
     """
-    Generate Google OAuth authorization URL.
+    Redirects to Google OAuth login.
     """
     try:
-        log_message("Google OAuth URL generation requested", "INFO")
+        log_message("Google OAuth login requested", "INFO")
         log_request_info(request)
         
         # Get optional parameters
         redirect_uri = request.GET.get('redirect_uri', GOOGLE_REDIRECT_URI)
-        state = request.GET.get('state', f'google_auth_{int(time.time())}')
+        state = f'google_auth_{int(time.time())}'
         
         # Build Google OAuth URL
         auth_params = {
@@ -112,27 +116,26 @@ def google_auth_url_view(request):
         auth_url = f"{GOOGLE_AUTH_URL}?" + "&".join([f"{k}={v}" for k, v in auth_params.items()])
         
         log_auth_event(
-            'google_auth_url_generated',
+            'google_auth_login_initiated',
             ip_address=request.META.get('REMOTE_ADDR'),
             additional_data={'state': state, 'redirect_uri': redirect_uri}
         )
         
-        log_message(f"Google OAuth URL generated with state: {state}", "INFO")
+        log_message(f"Redirecting to Google OAuth with state: {state}", "INFO")
         
-        return Response({
-            'auth_url': auth_url,
-            'state': state
-        }, status=status.HTTP_200_OK)
+        # Redirect to Google OAuth
+        return HttpResponseRedirect(auth_url)
         
     except Exception as e:
-        log_error(e, 'google_auth_url_view')
+        log_error(e, 'google_login_view')
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema(
     tags=['Authentication'],
     summary='Google OAuth Callback',
-    description='Handle Google OAuth callback and authenticate user',
+    description='Handle Google OAuth callback and authenticate user. Supports both GET (browser redirect from Google) and POST (direct API call).',
+    methods=['GET', 'POST'],
     request={
         'application/json': {
             'type': 'object',
@@ -205,11 +208,12 @@ def google_auth_url_view(request):
         )
     ]
 )
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def google_auth_callback_view(request):
     """
     Handle Google OAuth callback and authenticate user.
+    Supports both GET (browser redirect) and POST (direct API call).
     """
     start_time = time.time()
     
@@ -217,10 +221,10 @@ def google_auth_callback_view(request):
         log_message("Google OAuth callback received", "INFO")
         log_request_info(request)
         
-        # Get parameters from request
-        code = request.data.get('code')
-        state = request.data.get('state')
-        redirect_uri = request.data.get('redirect_uri', GOOGLE_REDIRECT_URI)
+        # Get parameters from request - support both GET (browser) and POST (API)
+        code = request.GET.get('code') or request.data.get('code')
+        state = request.GET.get('state') or request.data.get('state')
+        redirect_uri = request.GET.get('redirect_uri') or request.data.get('redirect_uri', GOOGLE_REDIRECT_URI)
         
         if not code:
             log_security_event(
@@ -253,6 +257,7 @@ def google_auth_callback_view(request):
         
         token_info = token_response.json()
         access_token = token_info.get('access_token')
+        google_refresh_token = token_info.get('refresh_token')  # Store this for production use
         
         if not access_token:
             log_security_event(
@@ -319,6 +324,14 @@ def google_auth_callback_view(request):
             
             log_message(f"New user created via Google OAuth: {email}", "INFO")
         
+        # Store Google refresh token and user data for production use
+        if google_refresh_token:
+            try:
+                store_google_token(user, google_refresh_token, google_id, picture)
+                log_message(f"Stored Google refresh token for user {user.username}", "INFO")
+            except Exception as e:
+                log_error(e, 'google_auth_callback_view - store_token', {'user_id': str(user.id)})
+        
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         access = refresh.access_token
@@ -338,7 +351,10 @@ def google_auth_callback_view(request):
         processing_time = time.time() - start_time
         log_message(f"User {email} authenticated via Google OAuth in {processing_time:.3f}s", "INFO")
         
-        return Response({
+        # Get user roles
+        user_roles = get_user_roles(user)
+        
+        response_data = {
             'access': str(access),
             'refresh': str(refresh),
             'user': {
@@ -349,11 +365,14 @@ def google_auth_callback_view(request):
                 'last_name': user.last_name,
                 'is_active': user.is_active,
                 'date_joined': user.date_joined.isoformat(),
+                'roles': user_roles
             },
             'is_new_user': is_new_user,
             'google_id': google_id,
             'picture': picture
-        }, status=status.HTTP_200_OK)
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
         log_error(e, 'google_auth_callback_view', {
@@ -365,19 +384,32 @@ def google_auth_callback_view(request):
 
 @extend_schema(
     tags=['Authentication'],
-    summary='Google OAuth Configuration',
-    description='Get Google OAuth configuration for frontend integration',
+    summary='Get Current User Info',
+    description='Get current authenticated user information (requires Bearer token or cookie)',
     responses={
         200: {
-            'description': 'Google OAuth configuration retrieved successfully',
+            'description': 'User information retrieved successfully',
             'content': {
                 'application/json': {
                     'example': {
-                        'client_id': 'your-google-client-id',
-                        'redirect_uri': 'http://localhost:8000/api/auth/google/callback/',
-                        'scope': 'openid email profile',
-                        'auth_url': 'https://accounts.google.com/o/oauth2/v2/auth'
+                        'id': 1,
+                        'username': 'user@gmail.com',
+                        'email': 'user@gmail.com',
+                        'first_name': 'John',
+                        'last_name': 'Doe',
+                        'is_active': True,
+                        'date_joined': '2024-01-01T00:00:00Z',
+                        'last_login': '2024-01-01T12:00:00Z',
+                        'roles': ['general-user', 'taxapp-user']
                     }
+                }
+            }
+        },
+        401: {
+            'description': 'Unauthorized - authentication required',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Authentication required'}
                 }
             }
         },
@@ -392,46 +424,67 @@ def google_auth_callback_view(request):
     }
 )
 @api_view(['GET'])
-@permission_classes([AllowAny])
-def google_auth_config_view(request):
+@permission_classes([IsAuthenticated])
+def google_me_view(request):
     """
-    Get Google OAuth configuration for frontend integration.
+    Get current user information.
     """
     try:
-        log_message("Google OAuth configuration requested", "INFO")
+        log_message(f"Current user info requested by user {request.user.username}", "INFO")
         log_request_info(request)
         
-        config = {
-            'client_id': GOOGLE_CLIENT_ID,
-            'redirect_uri': GOOGLE_REDIRECT_URI,
-            'scope': GOOGLE_SCOPE,
-            'auth_url': GOOGLE_AUTH_URL
+        # Get user roles
+        user_roles = get_user_roles(request.user)
+        
+        profile_data = {
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'is_active': request.user.is_active,
+            'date_joined': request.user.date_joined.isoformat(),
+            'last_login': request.user.last_login.isoformat() if request.user.last_login else None,
+            'roles': user_roles
         }
         
-        log_message("Google OAuth configuration provided", "INFO")
+        log_message(f"User info retrieved for user {request.user.username}", "INFO")
         
-        return Response(config, status=status.HTTP_200_OK)
+        return Response(profile_data, status=status.HTTP_200_OK)
         
     except Exception as e:
-        log_error(e, 'google_auth_config_view')
+        log_error(e, 'google_me_view', {'user_id': str(request.user.id) if request.user.is_authenticated else None})
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema(
     tags=['Authentication'],
-    summary='Google OAuth Status',
-    description='Check Google OAuth service status and configuration',
+    summary='Logout',
+    description='Logout current user and invalidate tokens',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'refresh': {'type': 'string', 'description': 'Refresh token to invalidate'}
+            }
+        }
+    },
     responses={
         200: {
-            'description': 'Google OAuth status retrieved successfully',
+            'description': 'Logout successful',
             'content': {
                 'application/json': {
                     'example': {
-                        'status': 'active',
-                        'client_id_configured': True,
-                        'redirect_uri': 'http://localhost:8000/api/auth/google/callback/',
-                        'google_services_accessible': True
+                        'message': 'Logout successful'
                     }
+                }
+            }
+        },
+        400: {
+            'description': 'Bad request - missing refresh token',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Refresh token required'}
                 }
             }
         },
@@ -445,35 +498,182 @@ def google_auth_config_view(request):
         }
     }
 )
-@api_view(['GET'])
+@api_view(['POST'])
 @permission_classes([AllowAny])
-def google_auth_status_view(request):
+def google_logout_view(request):
     """
-    Check Google OAuth service status and configuration.
+    Logout user and invalidate refresh token.
     """
     try:
-        log_message("Google OAuth status check requested", "INFO")
+        log_message("Google OAuth logout requested", "INFO")
         log_request_info(request)
         
-        # Check if Google services are accessible
+        refresh_token = request.data.get('refresh')
+        
+        if not refresh_token:
+            log_security_event(
+                'invalid_google_logout',
+                'WARNING',
+                'Missing refresh token for logout',
+                {'ip_address': request.META.get('REMOTE_ADDR')}
+            )
+            return Response({'error': 'Refresh token required'}, status=status.HTTP_400_BAD_REQUEST)
+        
         try:
-            test_response = requests.get('https://www.googleapis.com', timeout=5)
-            google_accessible = test_response.status_code == 200
-        except:
-            google_accessible = False
-        
-        status_info = {
-            'status': 'active' if GOOGLE_CLIENT_ID != 'your-google-client-id' else 'not_configured',
-            'client_id_configured': GOOGLE_CLIENT_ID != 'your-google-client-id',
-            'redirect_uri': GOOGLE_REDIRECT_URI,
-            'google_services_accessible': google_accessible,
-            'scope': GOOGLE_SCOPE
+            # Blacklist the refresh token
+            refresh = RefreshToken(refresh_token)
+            user_id = refresh.payload.get('user_id')
+            refresh.blacklist()
+            
+            # Log successful logout
+            log_auth_event(
+                'google_logout_success',
+                user_id=str(user_id),
+                ip_address=request.META.get('REMOTE_ADDR'),
+                additional_data={'token_type': 'refresh'}
+            )
+            
+            log_message(f"Google OAuth logout successful for user {user_id}", "INFO")
+            
+            # Create response to delete cookie if it exists
+            response = Response({'message': 'Logout successful'}, status=status.HTTP_200_OK)
+            response.delete_cookie('refresh', path='/')
+            response.delete_cookie('access', path='/')
+            
+            return response
+            
+        except TokenError as e:
+            log_security_event(
+                'invalid_google_logout',
+                'WARNING',
+                f'Invalid refresh token for logout: {str(e)}',
+                {'ip_address': request.META.get('REMOTE_ADDR')}
+            )
+            return Response({'error': 'Invalid refresh token'}, status=status.HTTP_400_BAD_REQUEST)
+            
+    except Exception as e:
+        log_error(e, 'google_logout_view')
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['Authentication'],
+    summary='Refresh Token',
+    description='Refresh JWT access token using refresh token',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'refresh': {'type': 'string', 'description': 'Refresh token'}
+            },
+            'required': ['refresh']
         }
+    },
+    responses={
+        200: {
+            'description': 'Token refreshed successfully',
+            'content': {
+                'application/json': {
+                    'example': {
+                        'access': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...'
+                    }
+                }
+            }
+        },
+        400: {
+            'description': 'Bad request - missing or invalid refresh token',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Refresh token required'}
+                }
+            }
+        },
+        401: {
+            'description': 'Unauthorized - invalid refresh token',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Invalid refresh token'}
+                }
+            }
+        },
+        500: {
+            'description': 'Internal server error',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Internal server error'}
+                }
+            }
+        }
+    }
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_refresh_view(request):
+    """
+    Refresh JWT access token using refresh token.
+    """
+    try:
+        log_message("Google OAuth token refresh requested", "INFO")
+        log_request_info(request)
         
-        log_message(f"Google OAuth status: {status_info['status']}", "INFO")
+        refresh_token = request.data.get('refresh')
         
-        return Response(status_info, status=status.HTTP_200_OK)
+        if not refresh_token:
+            log_security_event(
+                'invalid_google_token_refresh',
+                'WARNING',
+                'Missing refresh token',
+                {'ip_address': request.META.get('REMOTE_ADDR')}
+            )
+            return Response({'error': 'Refresh token required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Validate and refresh the JWT token
+            refresh = RefreshToken(refresh_token)
+            access = refresh.access_token
+            user_id = refresh.payload.get('user_id')
+            
+            # Optional: Refresh Google token if needed for background API calls
+            try:
+                user = User.objects.get(id=user_id)
+                if hasattr(user, 'profile'):
+                    # Attempt to refresh Google access token if expired
+                    google_access_token = refresh_google_access_token(
+                        get_stored_refresh_token(user),
+                        GOOGLE_CLIENT_ID,
+                        GOOGLE_CLIENT_SECRET
+                    )
+                    if not google_access_token:
+                        # Google token was revoked
+                        handle_revoked_token(user)
+                        log_message(f"Google token revoked for user {user.username}, cleared stored credentials", "WARNING")
+            except (User.DoesNotExist, Exception) as e:
+                # Silently continue if Google token refresh fails
+                pass
+            
+            # Log successful token refresh
+            log_auth_event(
+                'google_token_refresh_success',
+                user_id=str(user_id),
+                ip_address=request.META.get('REMOTE_ADDR'),
+                additional_data={'token_type': 'refresh'}
+            )
+            
+            log_message(f"Google OAuth token refreshed successfully for user {user_id}", "INFO")
+            
+            return Response({
+                'access': str(access)
+            }, status=status.HTTP_200_OK)
+            
+        except TokenError as e:
+            log_security_event(
+                'invalid_google_token_refresh',
+                'WARNING',
+                f'Invalid refresh token: {str(e)}',
+                {'ip_address': request.META.get('REMOTE_ADDR')}
+            )
+            return Response({'error': 'Invalid refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
         
     except Exception as e:
-        log_error(e, 'google_auth_status_view')
+        log_error(e, 'google_refresh_view')
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
