@@ -6,15 +6,15 @@ Django==5.2.7
 psutil==5.9.8
 
 # Database (SQLite is included with Python, but for production you might want PostgreSQL)
-# psycopg2-binary==2.9.9  # Uncomment for PostgreSQL support
+psycopg2-binary==2.9.9  # PostgreSQL support for production
 
 # Development and testing (optional)
 # pytest==7.4.3
 # pytest-django==4.7.0
 # coverage==7.3.2
 
-# Production server (optional)
-# gunicorn==21.2.0
+# Production server
+gunicorn==21.2.0
 # uvicorn==0.24.0  # For ASGI support
 
 # Security and authentication
@@ -35,3 +35,4 @@ drf-spectacular==0.26.5  # For Swagger/OpenAPI documentation
 
 # Google auth
 requests
+cryptography

@@ -30,17 +30,36 @@ def get_user_roles(user):
         list: List of user roles
     """
     try:
+        # Check if user has a profile with roles_storage
+        if hasattr(user, 'profile'):
+            profile = getattr(user, 'profile', None)
+            if profile and hasattr(profile, 'roles_storage'):
+                roles_str = profile.roles_storage
+                if roles_str:
+                    try:
+                        return json.loads(roles_str)
+                    except (json.JSONDecodeError, TypeError):
+                        # If it's not valid JSON, try treating it as a simple string or comma-separated
+                        if isinstance(roles_str, str):
+                            # Check if it's a comma-separated string
+                            if ',' in roles_str:
+                                return [role.strip() for role in roles_str.split(',')]
+                            return [roles_str] if roles_str else []
+                        return []
+        
+        # Fallback: check if roles exist directly on user object (old approach)
         if hasattr(user, 'roles'):
-            # If roles is a JSON field or string, parse it
-            if isinstance(user.roles, str):
+            roles_attr = getattr(user, 'roles')
+            if isinstance(roles_attr, str):
                 try:
-                    return json.loads(user.roles)
+                    return json.loads(roles_attr)
                 except (json.JSONDecodeError, TypeError):
-                    return [user.roles] if user.roles else []
-            elif isinstance(user.roles, list):
-                return user.roles
-            else:
-                return []
+                    if ',' in roles_attr:
+                        return [role.strip() for role in roles_attr.split(',')]
+                    return [roles_attr] if roles_attr else []
+            elif isinstance(roles_attr, list):
+                return roles_attr
+        
         return []
     except Exception as e:
         logger.error(f"Error getting user roles: {str(e)}")

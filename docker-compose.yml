@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: codea-auth-server
+    # Use runserver for development, gunicorn for production
+    # The command is determined by the ENVIRONMENT variable
+    command: sh -c "if [ \"$$ENVIRONMENT\" = \"production\" ]; then gunicorn codea_auth_server.wsgi:application --bind 0.0.0.0:8000 --workers 4; else python manage.py runserver 0.0.0.0:8000; fi"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - logs_volume:/app/logs
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=${DEBUG:-True}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DJANGO_SETTINGS_MODULE=codea_auth_server.settings
+      # Security - set DJANGO_SECRET_KEY in production (required!)
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-}
+      # Database configuration (only used in production)
+      - DB_NAME=${DB_NAME:-codea_auth}
+      - DB_USER=${DB_USER:-codea_user}
+      - DB_PASSWORD=${DB_PASSWORD:-codea_password}
+      - DB_HOST=${DB_HOST:-db}
+      - DB_PORT=${DB_PORT:-5432}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-}
+      # Google OAuth configuration (REQUIRED)
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/auth/google/auth/}
+      - GOOGLE_TOKEN_ENCRYPTION_KEY=${GOOGLE_TOKEN_ENCRYPTION_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - codea-network
+
+  # PostgreSQL database
+  # In production mode, this will be used. In development, it's available but SQLite is used by default
+  db:
+    image: postgres:15-alpine
+    container_name: codea-postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${DB_NAME:-codea_auth}
+      - POSTGRES_USER=${DB_USER:-codea_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-codea_password}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - codea-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-codea_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Only start PostgreSQL in production or if explicitly enabled
+    # For development with SQLite, you can comment this out or use a lightweight placeholder
+    restart: unless-stopped
+
+volumes:
+  static_volume:
+  logs_volume:
+  postgres_data:  # PostgreSQL data persistence
+
+networks:
+  codea-network:
+    driver: bridge
+

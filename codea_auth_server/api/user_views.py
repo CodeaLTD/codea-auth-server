@@ -261,13 +261,17 @@ def profile_view(request):
         log_message(f"Profile requested by user {request.user.username}", "INFO")
         log_request_info(request)
         
+        # Get user roles using the helper function
+        from codea_auth_server.api.role_utils import get_user_roles
+        user_roles = get_user_roles(request.user)
+        
         profile_data = {
             'user_id': request.user.id,
             'username': request.user.username,
             'email': request.user.email,
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
-            'roles': request.user.roles,
+            'roles': user_roles,
             'date_joined': request.user.date_joined.isoformat(),
             'last_login': request.user.last_login.isoformat() if request.user.last_login else None,
             'is_active': request.user.is_active,
@@ -319,7 +323,11 @@ def update_profile_view(request):
             updated_fields.append('email')
         
         if roles is not None or len(roles) > 0:
-            request.user.roles = roles
+            # Store roles in user profile
+            from codea_auth_server.api.models import UserProfile
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            profile.roles_storage = roles if isinstance(roles, str) else str(roles)
+            profile.save(update_fields=['roles_storage'])
             updated_fields.append('roles')
 
         if updated_fields:
@@ -879,11 +887,18 @@ def update_profile_view(request):
             request.user.first_name = first_name
         if last_name is not None:
             request.user.last_name = last_name
+        # Store roles if provided
         if roles is not None:
-            request.user.roles = roles
+            from codea_auth_server.api.models import UserProfile
+            profile, created = UserProfile.objects.get_or_create(user=request.user)
+            profile.roles_storage = roles if isinstance(roles, str) else str(roles)
+            profile.save(update_fields=['roles_storage'])
         
         # Save the user
         request.user.save()
+        
+        # Get updated roles for response
+        user_roles = get_user_roles(request.user)
         
         # Log the update
         log_database_operation('UPDATE', 'User', str(request.user.id), {
@@ -917,7 +932,7 @@ def update_profile_view(request):
             'email': request.user.email,
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
-            'roles': request.user.roles.split(',') if request.user.roles else []
+            'roles': user_roles
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
@@ -1015,4 +1030,173 @@ def delete_profile_view(request):
         
     except Exception as e:
         log_error(e, 'delete_profile_view', {'user_id': str(request.user.id) if request.user.is_authenticated else None})
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['Users'],
+    summary='Get User Profile by Username (Admin Only)',
+    description='Get full profile information for any user by username. Requires the user to have the "admin" role in roles_storage (JWT authentication required).',
+    parameters=[
+        {
+            'name': 'username',
+            'in': 'query',
+            'description': 'Username of the user to retrieve profile for',
+            'required': True,
+            'schema': {'type': 'string'},
+            'example': 'john_doe'
+        }
+    ],
+    responses={
+        200: {
+            'description': 'Profile retrieved successfully',
+            'content': {
+                'application/json': {
+                    'example': {
+                        'user_id': 1,
+                        'username': 'john_doe',
+                        'email': 'john@example.com',
+                        'first_name': 'John',
+                        'last_name': 'Doe',
+                        'roles': ['general-user', 'taxapp-user'],
+                        'date_joined': '2024-01-01T00:00:00Z',
+                        'last_login': '2024-01-01T12:00:00Z',
+                        'is_active': True,
+                        'is_staff': False,
+                        'is_superuser': False
+                    }
+                }
+            }
+        },
+        400: {
+            'description': 'Bad request - missing username parameter',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Username parameter is required'}
+                }
+            }
+        },
+        401: {
+            'description': 'Unauthorized - authentication required',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Authentication required'}
+                }
+            }
+        },
+        403: {
+            'description': 'Forbidden - admin access required',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Admin access required'}
+                }
+            }
+        },
+        404: {
+            'description': 'User not found',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'User not found'}
+                }
+            }
+        },
+        500: {
+            'description': 'Internal server error',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Internal server error'}
+                }
+            }
+        }
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_profile_by_username_view(request):
+    """
+    Get full profile information for any user by username (Admin only).
+    
+    Requires the current user to have the 'admin' role in roles_storage.
+    Returns complete profile data for the specified user.
+    """
+    try:
+        log_message(f"User profile by username requested by admin {request.user.username}", "INFO")
+        log_request_info(request)
+        
+        # Check if current user has admin role
+        if not has_role(request.user, 'admin'):
+            log_security_event(
+                'unauthorized_profile_access',
+                'WARNING',
+                f'Non-admin user {request.user.username} attempted to access profile by username',
+                {
+                    'user_id': str(request.user.id),
+                    'username': request.user.username,
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            return Response({'error': 'Admin access required'}, status=status.HTTP_403_FORBIDDEN)
+        
+        # Get username from query parameter
+        username = request.query_params.get('username') or request.GET.get('username')
+        
+        if not username:
+            return Response({'error': 'Username parameter is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Fetch the user by username
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        try:
+            target_user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            log_security_event(
+                'profile_access_user_not_found',
+                'INFO',
+                f'Admin {request.user.username} attempted to access profile for non-existent user: {username}',
+                {
+                    'admin_user_id': str(request.user.id),
+                    'admin_username': request.user.username,
+                    'requested_username': username,
+                    'ip_address': request.META.get('REMOTE_ADDR')
+                }
+            )
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Get user roles using the helper function
+        user_roles = get_user_roles(target_user)
+        
+        # Build profile data
+        profile_data = {
+            'user_id': target_user.id,
+            'username': target_user.username,
+            'email': target_user.email,
+            'first_name': target_user.first_name,
+            'last_name': target_user.last_name,
+            'roles': user_roles,
+            'date_joined': target_user.date_joined.isoformat(),
+            'last_login': target_user.last_login.isoformat() if target_user.last_login else None,
+            'is_active': target_user.is_active,
+            'is_staff': target_user.is_staff,
+            'is_superuser': target_user.is_superuser,
+        }
+        
+        # Log the access
+        log_auth_event(
+            'admin_profile_access',
+            user_id=str(request.user.id),
+            ip_address=request.META.get('REMOTE_ADDR'),
+            additional_data={
+                'admin_username': request.user.username,
+                'target_username': username,
+                'target_user_id': str(target_user.id)
+            }
+        )
+        
+        log_message(f"Profile data retrieved by admin {request.user.username} for user {username}", "INFO")
+        
+        return Response(profile_data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        log_error(e, 'get_user_profile_by_username_view', {'user_id': str(request.user.id) if request.user.is_authenticated else None})
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
