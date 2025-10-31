@@ -335,6 +335,7 @@ SIMPLE_JWT = {
 
 # Google OAuth Configuration
 # https://developers.google.com/identity/protocols/oauth2
+# All values MUST be set via environment variables
 
 GOOGLE_OAUTH_CONFIG = {
     'CLIENT_ID': os.environ.get('GOOGLE_CLIENT_ID'),
