@@ -21,6 +21,7 @@ urlpatterns = [
     path('auth/jwt/refresh/', auth_views.jwt_refresh_view, name='api_jwt_refresh'),
     path('auth/jwt/verify/', auth_views.jwt_verify_view, name='api_jwt_verify'),
     path('auth/jwt/logout/', auth_views.jwt_logout_view, name='api_jwt_logout'),
+    path('auth/register/', user_views.register_view, name='api_auth_register'),
     
     # Legacy Authentication endpoints (deprecated)
     # path('auth/login/', auth_views.jwt_login_view, name='api_login'),

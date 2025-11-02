@@ -30,9 +30,9 @@ logger = logging.getLogger('codea_auth_server')
 @extend_schema(
     tags=['Authentication'],
     summary='User Registration',
-    description='Register a new user account with username, email, and password',
+    description='Register a new user account with username, email, and password. Returns JWT tokens upon successful registration.',
     request={
-        'application/x-www-form-urlencoded': {
+        'application/json': {
             'type': 'object',
             'properties': {
                 'username': {
@@ -78,8 +78,17 @@ logger = logging.getLogger('codea_auth_server')
                 'application/json': {
                     'example': {
                         'message': 'User registered successfully',
-                        'user_id': 1,
-                        'username': 'john_doe'
+                        'access': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...',
+                        'refresh': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...',
+                        'user': {
+                            'id': 1,
+                            'username': 'john_doe',
+                            'email': 'john@example.com',
+                            'first_name': 'John',
+                            'last_name': 'Doe',
+                            'is_active': True,
+                            'date_joined': '2024-01-01T00:00:00Z'
+                        }
                     }
                 }
             }
@@ -123,24 +132,27 @@ logger = logging.getLogger('codea_auth_server')
         }
     }
 )
-@require_http_methods(["POST"])
+@api_view(['POST'])
+@permission_classes([AllowAny])
 def register_view(request):
     """
     User registration endpoint.
     
     Creates a new user account with the provided credentials.
     Username and email must be unique across the system.
+    Returns JWT tokens upon successful registration.
     """
     try:
         log_message("User registration attempt started", "INFO")
         log_request_info(request)
         
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password = request.POST.get('password')
-        first_name = request.POST.get('first_name', '')
-        last_name = request.POST.get('last_name', '')
-        roles = request.POST.get('roles', '')
+        # Get data from request (supports both JSON and form data)
+        username = request.data.get('username') or request.POST.get('username')
+        email = request.data.get('email') or request.POST.get('email')
+        password = request.data.get('password') or request.POST.get('password')
+        first_name = request.data.get('first_name') or request.POST.get('first_name', '')
+        last_name = request.data.get('last_name') or request.POST.get('last_name', '')
+        roles = request.data.get('roles') or request.POST.get('roles', '')
         
         if not username or not email or not password:
             log_security_event(
@@ -149,37 +161,50 @@ def register_view(request):
                 'Missing required registration fields',
                 {'ip_address': request.META.get('REMOTE_ADDR')}
             )
-            return JsonResponse({'error': 'Username, email, and password are required'}, status=400)
+            return Response({'error': 'Username, email, and password are required'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Check if user already exists
         from django.contrib.auth import get_user_model
-        if get_user_model().objects.filter(username=username).exists():
+        User = get_user_model()
+        
+        if User.objects.filter(username=username).exists():
             log_security_event(
                 'duplicate_username_registration',
                 'WARNING',
                 f'Registration attempt with existing username: {username}',
                 {'ip_address': request.META.get('REMOTE_ADDR')}
             )
-            return JsonResponse({'error': 'Username already exists'}, status=400)
+            return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
         
-        if get_user_model().objects.filter(email=email).exists():
+        if User.objects.filter(email=email).exists():
             log_security_event(
                 'duplicate_email_registration',
                 'WARNING',
                 f'Registration attempt with existing email: {email}',
                 {'ip_address': request.META.get('REMOTE_ADDR')}
             )
-            return JsonResponse({'error': 'Email already exists'}, status=400)
+            return Response({'error': 'Email already exists'}, status=status.HTTP_400_BAD_REQUEST)
         
         # Create new user
-        user = get_user_model().objects.create_user(
+        user = User.objects.create_user(
             username=username,
             email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name,
-            roles=roles
+            last_name=last_name
         )
+        
+        # Handle roles if provided
+        if roles:
+            from codea_auth_server.api.models import UserProfile
+            profile, created = UserProfile.objects.get_or_create(user=user)
+            profile.roles_storage = roles if isinstance(roles, str) else str(roles)
+            profile.save(update_fields=['roles_storage'])
+        
+        # Generate JWT tokens for the newly registered user
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+        access = refresh.access_token
         
         log_database_operation('CREATE', 'User', str(user.id), {
             'username': username,
@@ -195,19 +220,28 @@ def register_view(request):
         
         log_message(f"User {username} registered successfully", "INFO")
         
-        return JsonResponse({
+        return Response({
             'message': 'User registered successfully',
-            'user_id': user.id,
-            'username': user.username
-        }, status=201)
+            'access': str(access),
+            'refresh': str(refresh),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_active': user.is_active,
+                'date_joined': user.date_joined.isoformat(),
+            }
+        }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
         log_error(e, 'register_view', {
-            'username': request.POST.get('username'),
-            'email': request.POST.get('email'),
+            'username': request.data.get('username') or request.POST.get('username'),
+            'email': request.data.get('email') or request.POST.get('email'),
             'ip_address': request.META.get('REMOTE_ADDR')
         })
-        return JsonResponse({'error': 'Internal server error'}, status=500)
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema(

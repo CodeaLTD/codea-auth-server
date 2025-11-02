@@ -286,3 +286,9 @@ Alternatively, you can use a `.env` file with Docker Compose (it automatically l
 
 ###Docker image is built directly by Render when we deployed in the moment . we won`t use additional registry
 ###Render build command is Docker Entrypoint + cmd from dockerfile
+
+
+### FOR DB
+-Avoid using the Render database superuser credentials for your Django app — use the newly created one instead.
+-Always use SSL mode = require when connecting externally.
+-Never expose passwords in code or logs.
