@@ -1,22 +1,22 @@
-# """
-# API Documentation views for the Codea Auth Server.
-#
-# This module provides Swagger/OpenAPI documentation endpoints
-# and API schema generation.
-# """
-#
-# from drf_spectacular.utils import extend_schema, OpenApiParameter
-# from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
-# from rest_framework.decorators import api_view, permission_classes
-# from rest_framework.permissions import AllowAny
-# from rest_framework.response import Response
-# from rest_framework import status
-# import logging
-#
-# from codea_auth_server.logging_utils import log_request_info, log_message
-#
-# # Get logger for this module
-# logger = logging.getLogger('codea_auth_server')
+"""
+API Documentation views for the Codea Auth Server.
+
+This module provides Swagger/OpenAPI documentation endpoints
+and API schema generation.
+"""
+
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+import logging
+
+from codea_auth_server.logging_utils import log_request_info, log_message, log_error
+
+# Get logger for this module
+logger = logging.getLogger('codea_auth_server')
 #
 #
 # class CustomSpectacularAPIView(SpectacularAPIView):

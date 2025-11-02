@@ -4,6 +4,7 @@ Django settings module.
 This module automatically loads the appropriate settings based on the ENVIRONMENT
 environment variable:
 - 'production' -> loads settings.prod
+- 'staging' -> loads settings.stag
 - anything else -> loads settings.dev
 """
 

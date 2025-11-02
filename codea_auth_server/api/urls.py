@@ -5,7 +5,7 @@ This module defines all API endpoints organized by functionality.
 """
 from django.http import HttpResponse
 from django.urls import path
-from codea_auth_server.api import auth_views, user_views, health_views, docs_views, google_auth_views
+from codea_auth_server.api import auth_views, user_views, health_views, docs_views, google_auth_views, rate_views
 
 # API URL patterns organized by functionality
 urlpatterns = [
@@ -47,7 +47,10 @@ urlpatterns = [
     path('health/', health_views.health_check_view, name='api_health'),
     path('health/detailed/', health_views.detailed_health_view, name='api_health_detailed'),
     path('health/metrics/', health_views.metrics_view, name='api_metrics'),
-    path('health/status/', health_views.status_view, name='api_status')
+    path('health/status/', health_views.status_view, name='api_status'),
+    
+    # API Management endpoints
+    path('limiter/', rate_views.apiLimiter, name='api_limiter'),
 ]
     
 #     # API Documentation endpoints
