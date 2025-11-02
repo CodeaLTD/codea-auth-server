@@ -110,11 +110,12 @@ GOOGLE_TOKEN_ENCRYPTION_KEY = os.environ.get('GOOGLE_TOKEN_ENCRYPTION_KEY')
 if not GOOGLE_TOKEN_ENCRYPTION_KEY:
     raise ValueError("GOOGLE_TOKEN_ENCRYPTION_KEY environment variable must be set in staging!")
 
-# Update Swagger servers for staging if provided
-if 'API_BASE_URL' in os.environ:
-    SPECTACULAR_SETTINGS['SERVERS'] = [
-        {'url': os.environ.get('API_BASE_URL'), 'description': 'Staging server'},
-    ]
+# Update Swagger servers for staging
+# Use API_BASE_URL from environment if provided, otherwise use default production URL
+api_base_url = os.environ.get('API_BASE_URL', 'https://codea-auth-server.onrender.com')
+SPECTACULAR_SETTINGS['SERVERS'] = [
+    {'url': api_base_url, 'description': 'Staging server'},
+]
 
 # Security settings for staging
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').lower() == 'true'
