@@ -92,19 +92,83 @@ WSGI_APPLICATION = 'codea_auth_server.wsgi.application'
 
 if ENVIRONMENT == 'production':
     # PostgreSQL for production
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.environ.get('DB_NAME', 'codea_auth'),
-            'USER': os.environ.get('DB_USER', 'codea_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
-            'PORT': os.environ.get('DB_PORT', '5432'),
-            'OPTIONS': {
-                'connect_timeout': 10,
-            },
+    # Support DB_URL environment variable (common in cloud platforms)
+    # Falls back to individual DB_* environment variables if DB_URL is not set
+    database_url = os.environ.get('DB_URL')
+    # Also check if DB_HOST was incorrectly set to a full URL
+    db_host = os.environ.get('DB_HOST', '')
+    if db_host and db_host.startswith(('postgresql://', 'postgres://')):
+        database_url = db_host
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("DB_HOST appears to contain a full database URL. Using it as DB_URL.")
+    
+    if database_url:
+        # Parse DB_URL (format: postgresql://user:password@host:port/dbname)
+        try:
+            from urllib.parse import urlparse, unquote
+            # Handle both postgresql:// and postgres:// schemes
+            if database_url.startswith('postgres://'):
+                database_url = database_url.replace('postgres://', 'postgresql://', 1)
+            parsed = urlparse(database_url)
+            
+            # Extract database name (handle both /dbname and /dbname?params formats)
+            db_name = parsed.path.lstrip('/')
+            if '?' in db_name:
+                db_name = db_name.split('?')[0]
+            
+            # Decode URL-encoded values
+            db_user = unquote(parsed.username) if parsed.username else None
+            db_password = unquote(parsed.password) if parsed.password else None
+            db_host = parsed.hostname
+            db_port = parsed.port if parsed.port else 5432
+            
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': db_name,
+                    'USER': db_user,
+                    'PASSWORD': db_password,
+                    'HOST': db_host,
+                    'PORT': str(db_port),
+                    'OPTIONS': {
+                        'connect_timeout': 10,
+                    },
+                }
+            }
+        except Exception as e:
+            # If parsing fails, fall back to individual variables
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to parse DB_URL: {e}. Falling back to individual DB_* variables.")
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': os.environ.get('DB_NAME', 'codea_auth'),
+                    'USER': os.environ.get('DB_USER', 'codea_user'),
+                    'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+                    'HOST': os.environ.get('DB_HOST', 'localhost'),
+                    'PORT': os.environ.get('DB_PORT', '5432'),
+                    'OPTIONS': {
+                        'connect_timeout': 10,
+                    },
+                }
+            }
+    else:
+        # Use individual environment variables
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': os.environ.get('DB_NAME', 'codea_auth'),
+                'USER': os.environ.get('DB_USER', 'codea_user'),
+                'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+                'HOST': os.environ.get('DB_HOST', 'localhost'),
+                'PORT': os.environ.get('DB_PORT', '5432'),
+                'OPTIONS': {
+                    'connect_timeout': 10,
+                },
+            }
         }
-    }
 else:
     # SQLite3 for development
     DATABASES = {
