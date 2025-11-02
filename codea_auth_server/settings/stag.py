@@ -16,10 +16,20 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in staging!
 DEBUG = False
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else []
-if not ALLOWED_HOSTS:
-    # In staging without ALLOWED_HOSTS set, default to localhost
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# ALLOWED_HOSTS configuration
+# Supports both environment variable and automatic Render.com detection
+env_hosts = os.environ.get('ALLOWED_HOSTS', '').split(',') if os.environ.get('ALLOWED_HOSTS') else []
+env_hosts = [host.strip() for host in env_hosts if host.strip()]  # Remove empty strings
+
+if not env_hosts:
+    # Default to localhost if no environment variable is set
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.onrender.com']
+else:
+    # Use environment variable hosts and ensure Render.com is included
+    ALLOWED_HOSTS = env_hosts
+    # Add .onrender.com if not already present (supports all Render subdomains)
+    if '.onrender.com' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('.onrender.com')
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
