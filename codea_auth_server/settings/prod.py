@@ -42,8 +42,24 @@ DATABASES = {
 # CORS Configuration
 # https://github.com/adamchainz/django-cors-headers
 
-# CORS origins should be set via environment variable in production
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if os.environ.get('CORS_ALLOWED_ORIGINS') else []
+# Default localhost origins for local development/testing
+default_origins = [
+    "http://localhost:3000",  # React development server
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",  # Vue development server
+    "http://127.0.0.1:8080",
+    "http://localhost:4200",  # Angular development server
+    "http://127.0.0.1:4200",
+    "http://localhost:8000",  # Django development server
+    "http://127.0.0.1:8000",
+]
+
+# Additional origins from environment variable (comma-separated)
+env_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if os.environ.get('CORS_ALLOWED_ORIGINS') else []
+env_origins = [origin.strip() for origin in env_origins if origin.strip()]  # Remove empty strings
+
+# Combine default localhost origins with environment-specified origins
+CORS_ALLOWED_ORIGINS = default_origins + env_origins
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -93,4 +109,101 @@ CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'False').lower() == 't
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
+
+# Production Logging Configuration
+# Logs to both console (for Render monitoring) and files (for backup/analysis)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {name} {message}',
+            'style': '{',
+        },
+        'detailed': {
+            'format': '[{asctime}] {levelname} in {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        # Console handlers for Render (stdout/stderr)
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'detailed',
+            'stream': 'ext://sys.stdout',
+        },
+        'console_error': {
+            'level': 'ERROR',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+            'stream': 'ext://sys.stderr',
+        },
+        # File handlers for backup and analysis
+        'file_info': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': LOGS_DIR / 'info.log',
+            'formatter': 'detailed',
+        },
+        'file_error': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': LOGS_DIR / 'error.log',
+            'formatter': 'verbose',
+        },
+        'file_auth': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': LOGS_DIR / 'auth.log',
+            'formatter': 'detailed',
+        },
+        'file_debug': {
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            'filename': LOGS_DIR / 'debug.log',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'console_error', 'file_info', 'file_error'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console', 'console_error', 'file_info', 'file_error'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console_error', 'file_error'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.security': {
+            'handlers': ['console_error', 'file_error'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console', 'file_debug'],
+            'level': 'WARNING',  # Reduce DB query logging in production
+            'propagate': False,
+        },
+        'codea_auth_server': {
+            'handlers': ['console', 'console_error', 'file_info', 'file_error', 'file_debug'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'auth': {
+            'handlers': ['console', 'file_auth'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 

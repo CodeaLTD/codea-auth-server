@@ -37,6 +37,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'codea_auth_server.api.middleware.RequestLoggingMiddleware',  # Request logging for monitoring
 ]
 
 ROOT_URLCONF = 'codea_auth_server.urls'
