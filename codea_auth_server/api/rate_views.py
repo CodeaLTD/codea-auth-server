@@ -70,51 +70,99 @@ def apiLimiter(request):
         identifier_value = str(request.user.id) if request.user.is_authenticated else client_ip
         
         # Check if rate limiting is configured in settings
-        rate_limit_enabled = getattr(settings, 'REST_FRAMEWORK', {}).get('DEFAULT_THROTTLE_CLASSES', None) is not None
+        rest_framework_settings = getattr(settings, 'REST_FRAMEWORK', {})
+        throttle_classes = rest_framework_settings.get('DEFAULT_THROTTLE_CLASSES', [])
+        rate_limit_enabled = len(throttle_classes) > 0 if throttle_classes else False
         
         # Get rate limit configuration (if available)
-        throttle_settings = getattr(settings, 'REST_FRAMEWORK', {}).get('DEFAULT_THROTTLE_RATES', {})
+        throttle_settings = rest_framework_settings.get('DEFAULT_THROTTLE_RATES', {})
         
-        # Parse throttle settings and set default limits
+        # Parse throttle settings and extract limits
         def parse_rate_limit(rate_str):
-            """Parse rate limit string like '100/min' or '1000/hour' and return the number."""
+            """Parse rate limit string like '60/minute' or '500/hour' and return (value, period)."""
             try:
                 if isinstance(rate_str, (int, float)):
-                    return int(rate_str)
-                return int(rate_str.split('/')[0])
-            except (ValueError, AttributeError):
-                return None
+                    return int(rate_str), 'minute'
+                parts = rate_str.split('/')
+                value = int(parts[0])
+                period = parts[1].lower().strip() if len(parts) > 1 else 'minute'
+                return value, period
+            except (ValueError, AttributeError, IndexError):
+                return None, None
         
-        user_rate = throttle_settings.get('user', '100/min')
-        anonymous_rate = throttle_settings.get('anon', '60/min')
-        rate_str = user_rate if request.user.is_authenticated else anonymous_rate
+        # Get appropriate rate limit based on authentication status
+        if request.user.is_authenticated:
+            user_rate = throttle_settings.get('user', '500/hour')
+            value, period = parse_rate_limit(user_rate)
+            # Parse user rate (typically per hour)
+            per_hour = value if period in ['hour', 'h'] else (value * 60 if period in ['minute', 'min'] else value)
+            per_minute = value if period in ['minute', 'min'] else (per_hour // 60 if per_hour else 60)
+            per_day = per_hour * 24 if per_hour else 10000
+        else:
+            anon_rate = throttle_settings.get('anon', '60/minute')
+            value, period = parse_rate_limit(anon_rate)
+            # Parse anonymous rate (typically per minute)
+            per_minute = value if period in ['minute', 'min'] else (value // 60 if period in ['hour', 'h'] else value)
+            per_hour = value if period in ['hour', 'h'] else (per_minute * 60 if per_minute else 500)
+            per_day = per_hour * 24 if per_hour else 10000
         
-        # Default limits if not configured
-        default_limits = {
-            'per_minute': parse_rate_limit(rate_str) or 60,
-            'per_hour': parse_rate_limit(throttle_settings.get('user', '1000/hour')) or 1000,
-            'per_day': parse_rate_limit(throttle_settings.get('user', '10000/day')) or 10000
-        }
+        # Set limits based on configuration
+        if rate_limit_enabled:
+            default_limits = {
+                'per_minute': per_minute or 60,
+                'per_hour': per_hour or 500,
+                'per_day': per_day or 10000
+            }
+        else:
+            default_limits = {}
         
         # Try to get current rate limit usage from cache (if rate limiting is active)
         current_usage = None
         if rate_limit_enabled:
-            # Construct cache keys for rate limiting
-            minute_key = f"rate_limit:{identifier_value}:minute"
-            hour_key = f"rate_limit:{identifier_value}:hour"
-            day_key = f"rate_limit:{identifier_value}:day"
+            # DRF stores throttle history in cache with format: 'throttle_{scope}_{ident}'
+            throttle_scope = 'user' if request.user.is_authenticated else 'anon'
+            throttle_ident = str(request.user.id) if request.user.is_authenticated else client_ip
             
-            # Get current counts (these would be set by rate limiting middleware/throttle classes)
-            minute_count = cache.get(minute_key, 0)
-            hour_count = cache.get(hour_key, 0)
-            day_count = cache.get(day_key, 0)
+            # DRF's throttle classes use cache keys like: 'throttle_anon_127.0.0.1'
+            # They store a list of timestamps representing request history
+            throttle_key = f'throttle_{throttle_scope}_{throttle_ident}'
+            throttle_history = cache.get(throttle_key, [])
             
-            # Use the most restrictive limit for display
+            # Get the active limit and period
+            if not request.user.is_authenticated:
+                # Anonymous users: use per_minute limit
+                active_limit = per_minute
+                active_period_seconds = 60
+            else:
+                # Authenticated users: use per_hour limit
+                active_limit = per_hour
+                active_period_seconds = 3600
+            
+            # Calculate current usage from throttle history
+            current_time = time.time()
+            if isinstance(throttle_history, list):
+                # Count requests within the active period
+                cutoff_time = current_time - active_period_seconds
+                recent_requests = [t for t in throttle_history if isinstance(t, (int, float)) and t > cutoff_time]
+                request_count = len(recent_requests)
+            else:
+                # Fallback if history format is unexpected
+                request_count = 0
+            
+            # Calculate remaining requests
+            remaining = max(0, active_limit - request_count)
+            
+            # Calculate reset time (next period boundary)
+            if active_period_seconds == 60:
+                reset_at = current_time + (60 - (current_time % 60))
+            else:
+                reset_at = current_time + (3600 - (current_time % 3600))
+            
             current_usage = {
-                'requests': max(minute_count, hour_count, day_count),
-                'limit': int(default_limits['per_minute']),
-                'remaining': max(0, int(default_limits['per_minute']) - minute_count),
-                'reset_at': time.time() + 60  # Approximate reset time
+                'requests': request_count,
+                'limit': active_limit,
+                'remaining': remaining,
+                'reset_at': reset_at
             }
         else:
             # Rate limiting not configured
@@ -128,7 +176,7 @@ def apiLimiter(request):
         rate_limit_info = {
             'rate_limit_enabled': rate_limit_enabled,
             'current_usage': current_usage,
-            'limits': default_limits if rate_limit_enabled else {},
+            'limits': default_limits,
             'identifier': {
                 'type': identifier_type,
                 'value': identifier_value
