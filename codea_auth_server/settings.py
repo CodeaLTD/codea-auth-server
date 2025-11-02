@@ -358,6 +358,15 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    # Rate Limiting Configuration
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',  # For anonymous users (IP-based)
+        'rest_framework.throttling.UserRateThrottle',   # For authenticated users (user-based)
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/minute',      # 100 requests per minute for anonymous users
+        'user': '500/hour',       # 1000 requests per hour for authenticated users
+    },
 }
 
 # JWT Configuration
