@@ -12,6 +12,7 @@ urlpatterns = [
     # Google OAuth Authentication endpoints
     path('auth/google/login/', google_auth_views.google_login_view, name='api_google_login'),
     path('auth/google/auth/', google_auth_views.google_auth_callback_view, name='api_google_auth'),
+    path('auth/google/verify/', google_auth_views.google_verify_view, name='api_google_verify'),
     path('auth/google/me/', google_auth_views.google_me_view, name='api_google_me'),
     path('auth/google/logout/', google_auth_views.google_logout_view, name='api_google_logout'),
     path('auth/google/refresh/', google_auth_views.google_refresh_view, name='api_google_refresh'),

@@ -677,3 +677,176 @@ def google_refresh_view(request):
     except Exception as e:
         log_error(e, 'google_refresh_view')
         return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['Authentication'],
+    summary='Verify Google Token',
+    description='Verify Google OAuth access token validity by checking with Google tokeninfo endpoint',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'token': {'type': 'string', 'description': 'Google OAuth access token to verify'}
+            },
+            'required': ['token']
+        }
+    },
+    responses={
+        200: {
+            'description': 'Token is valid',
+            'content': {
+                'application/json': {
+                    'example': {
+                        'valid': True,
+                        'audience': '123456789-abcdefgh.apps.googleusercontent.com',
+                        'scope': 'openid email profile',
+                        'expires_in': 3599,
+                        'user_id': '123456789',
+                        'email': 'user@example.com',
+                        'verified_email': True
+                    }
+                }
+            }
+        },
+        400: {
+            'description': 'Bad request - missing token',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Token required'}
+                }
+            }
+        },
+        401: {
+            'description': 'Unauthorized - invalid or expired token',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Invalid token', 'valid': False}
+                }
+            }
+        },
+        500: {
+            'description': 'Internal server error',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Internal server error'}
+                }
+            }
+        }
+    }
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def google_verify_view(request):
+    """
+    Verify Google OAuth access token by calling Google's tokeninfo endpoint.
+    
+    This endpoint checks if a Google OAuth access token is valid, not expired,
+    and returns information about the token including audience, scope, and user info.
+    """
+    try:
+        log_message("Google token verification requested", "INFO")
+        log_request_info(request)
+        
+        token = request.data.get('token')
+        
+        if not token:
+            log_security_event(
+                'invalid_google_token_verify',
+                'WARNING',
+                'Missing token for Google verification',
+                {'ip_address': request.META.get('REMOTE_ADDR')}
+            )
+            return Response({'error': 'Token required', 'valid': False}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify token with Google's tokeninfo endpoint
+        tokeninfo_url = 'https://oauth2.googleapis.com/tokeninfo'
+        params = {'access_token': token}
+        
+        try:
+            verify_response = requests.get(tokeninfo_url, params=params, timeout=10)
+            
+            if verify_response.status_code == 200:
+                token_info = verify_response.json()
+                
+                # Verify the audience (client ID) matches our configured client ID
+                audience = token_info.get('aud')
+                if audience and audience != GOOGLE_CLIENT_ID:
+                    log_security_event(
+                        'google_token_audience_mismatch',
+                        'WARNING',
+                        f'Token audience mismatch: {audience} vs {GOOGLE_CLIENT_ID}',
+                        {'ip_address': request.META.get('REMOTE_ADDR')}
+                    )
+                    return Response({
+                        'error': 'Token audience does not match',
+                        'valid': False
+                    }, status=status.HTTP_401_UNAUTHORIZED)
+                
+                # Log successful verification
+                email = token_info.get('email', 'unknown')
+                log_auth_event(
+                    'google_token_verify_success',
+                    user_id=None,  # Google token doesn't have our user ID
+                    ip_address=request.META.get('REMOTE_ADDR'),
+                    additional_data={
+                        'email': email,
+                        'audience': audience,
+                        'scope': token_info.get('scope', '')
+                    }
+                )
+                
+                log_message(f"Google token verified successfully for {email}", "INFO")
+                
+                # Return token information
+                return Response({
+                    'valid': True,
+                    'audience': token_info.get('aud'),
+                    'scope': token_info.get('scope'),
+                    'expires_in': token_info.get('expires_in'),
+                    'user_id': token_info.get('user_id'),
+                    'email': token_info.get('email'),
+                    'verified_email': token_info.get('verified_email', False),
+                    'issued_to': token_info.get('issued_to'),
+                    'expires_at': token_info.get('exp')
+                }, status=status.HTTP_200_OK)
+                
+            elif verify_response.status_code == 400:
+                # Invalid token
+                error_data = verify_response.json()
+                log_security_event(
+                    'invalid_google_token_verify',
+                    'WARNING',
+                    f'Invalid Google token: {error_data.get("error_description", "Unknown error")}',
+                    {'ip_address': request.META.get('REMOTE_ADDR')}
+                )
+                return Response({
+                    'error': 'Invalid token',
+                    'valid': False,
+                    'error_description': error_data.get('error_description', 'Token verification failed')
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            else:
+                log_security_event(
+                    'google_token_verify_error',
+                    'WARNING',
+                    f'Google token verification returned status {verify_response.status_code}',
+                    {'ip_address': request.META.get('REMOTE_ADDR')}
+                )
+                return Response({
+                    'error': 'Token verification failed',
+                    'valid': False
+                }, status=status.HTTP_401_UNAUTHORIZED)
+                
+        except requests.exceptions.RequestException as e:
+            log_error(e, 'google_verify_view - request_exception')
+            return Response({
+                'error': 'Failed to connect to Google token verification service',
+                'valid': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    except Exception as e:
+        log_error(e, 'google_verify_view', {
+            'ip_address': request.META.get('REMOTE_ADDR')
+        })
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
