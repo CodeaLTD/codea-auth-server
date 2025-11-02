@@ -21,6 +21,10 @@ if not ALLOWED_HOSTS:
     # In production without ALLOWED_HOSTS set, default to localhost
     ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
