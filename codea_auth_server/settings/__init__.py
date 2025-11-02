@@ -13,7 +13,8 @@ ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development').lower()
 
 if ENVIRONMENT == 'production':
     from .prod import *
+elif ENVIRONMENT == 'staging':
+    from .stag import *
 else:
     from .dev import *
-
 

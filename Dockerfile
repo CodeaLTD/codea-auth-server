@@ -29,8 +29,8 @@ RUN mkdir -p /app/logs
 # Collect static files (if needed)
 # RUN python manage.py collectstatic --noinput
 
-# Expose port 8000
-EXPOSE 8000
+# Expose port (Render uses dynamic PORT, default to 8000)
+EXPOSE ${PORT:-8000}
 
 # Use entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
@@ -38,6 +38,6 @@ RUN chmod +x /docker-entrypoint.sh
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
-# Default command
-CMD ["gunicorn", "codea_auth_server.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4"]
+# Default command - use PORT env var for Render compatibility
+CMD sh -c "gunicorn codea_auth_server.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 4"
 
