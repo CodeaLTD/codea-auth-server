@@ -5,7 +5,7 @@ This module defines all API endpoints organized by functionality.
 """
 from django.http import HttpResponse
 from django.urls import path
-from codea_auth_server.api import auth_views, user_views, health_views, docs_views, google_auth_views, rate_views
+from codea_auth_server.api import auth_views, user_views, health_views, docs_views, google_auth_views, rate_views, oauth2_views
 
 # API URL patterns organized by functionality
 urlpatterns = [
@@ -21,6 +21,7 @@ urlpatterns = [
     path('auth/jwt/login/', auth_views.jwt_login_view, name='api_jwt_login'),
     path('auth/jwt/refresh/', auth_views.jwt_refresh_view, name='api_jwt_refresh'),
     path('auth/jwt/verify/', auth_views.jwt_verify_view, name='api_jwt_verify'),
+    path('auth/jwt/me/', auth_views.jwt_me_view, name='api_jwt_me'),
     path('auth/jwt/logout/', auth_views.jwt_logout_view, name='api_jwt_logout'),
     path('auth/jwt/register/', user_views.register_view, name='api_jwt_register'),
     
@@ -51,6 +52,11 @@ urlpatterns = [
     
     # API Management endpoints
     path('limiter/', rate_views.apiLimiter, name='api_limiter'),
+    
+    # OAuth 2.0 endpoints
+    path('oauth2/authorize/', oauth2_views.oauth2_authorize_view, name='oauth2_authorize'),
+    path('oauth2/token/', oauth2_views.oauth2_token_view, name='oauth2_token'),
+    path('oauth2/userinfo/', oauth2_views.oauth2_userinfo_view, name='oauth2_userinfo'),
 ]
     
 #     # API Documentation endpoints

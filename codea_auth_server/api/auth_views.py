@@ -28,7 +28,7 @@ logger = logging.getLogger('codea_auth_server')
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['JWT Login'],
     summary='Login',
     description='Authenticate user with username and password and return JWT tokens',
     request={
@@ -177,7 +177,7 @@ def jwt_login_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['JWT Refresh'],
     summary='JWT Token Refresh',
     description='Refresh JWT access token using refresh token',
     request={
@@ -281,7 +281,7 @@ def jwt_refresh_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['JWT Verify'],
     summary='JWT Token Verify',
     description='Verify JWT access token validity',
     request={
@@ -397,7 +397,90 @@ def jwt_verify_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['JWT Me'],
+    summary='Get Current User (Who Am I)',
+    description='Get current authenticated user information based on JWT token',
+    responses={
+        200: {
+            'description': 'User information retrieved successfully',
+            'content': {
+                'application/json': {
+                    'example': {
+                        'id': 1,
+                        'username': 'john_doe',
+                        'email': 'john@example.com',
+                        'first_name': 'John',
+                        'last_name': 'Doe',
+                        'is_active': True,
+                        'date_joined': '2024-01-01T00:00:00Z',
+                        'last_login': '2024-01-01T12:00:00Z',
+                        'roles': ['general-user', 'taxapp-user']
+                    }
+                }
+            }
+        },
+        401: {
+            'description': 'Unauthorized - authentication required',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Authentication required'}
+                }
+            }
+        },
+        500: {
+            'description': 'Internal server error',
+            'content': {
+                'application/json': {
+                    'example': {'error': 'Internal server error'}
+                }
+            }
+        }
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def jwt_me_view(request):
+    """
+    Get current authenticated user information based on JWT token.
+    Returns the user's profile information including roles.
+    """
+    try:
+        log_message(f"JWT 'who am I' requested by user {request.user.username}", "INFO")
+        log_request_info(request)
+        
+        # Get user roles using the helper function
+        from codea_auth_server.api.role_utils import get_user_roles
+        user_roles = get_user_roles(request.user)
+        
+        # Log successful request
+        log_auth_event(
+            'jwt_me_requested',
+            user_id=str(request.user.id),
+            ip_address=request.META.get('REMOTE_ADDR'),
+            additional_data={'username': request.user.username}
+        )
+        
+        log_message(f"User {request.user.username} requested their profile via JWT", "INFO")
+        
+        return Response({
+            'id': request.user.id,
+            'username': request.user.username,
+            'email': request.user.email,
+            'first_name': request.user.first_name,
+            'last_name': request.user.last_name,
+            'is_active': request.user.is_active,
+            'date_joined': request.user.date_joined.isoformat(),
+            'last_login': request.user.last_login.isoformat() if request.user.last_login else None,
+            'roles': user_roles,
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        log_error(e, 'jwt_me_view', {'user_id': str(request.user.id) if request.user.is_authenticated else None})
+        return Response({'error': 'Internal server error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['JWT Logout'],
     summary='Logout',
     description='Logout user and blacklist refresh token',
     request={
@@ -591,7 +674,7 @@ def jwt_logout_view(request):
 #
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Change Password'],
     summary='Change Password',
     description='Change user password (JWT authentication required)',
     request={

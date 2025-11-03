@@ -21,7 +21,7 @@ logger = logging.getLogger('codea_auth_server')
 
 
 @extend_schema(
-    tags=['API Management'],
+    tags=['API Rate Limiter'],
     summary='API Rate Limiter Status',
     description='Get rate limit information and status for the current user or IP address',
     responses={

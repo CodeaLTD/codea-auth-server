@@ -28,7 +28,7 @@ logger = logging.getLogger('codea_auth_server')
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['User Registration'],
     summary='User Registration',
     description='Register a new user account with username, email, and password. Returns JWT tokens upon successful registration.',
     request={
@@ -245,7 +245,7 @@ def register_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['User Profile'],
     summary='Get User Profile',
     description='Get current user profile information (JWT authentication required)',
     responses={
@@ -422,7 +422,7 @@ def user_list_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['Check Role'],
     summary='Check User Role',
     description='Check if the current user has a specific role (JWT authentication required)',
     request={
@@ -517,7 +517,7 @@ def check_role_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['Check Any Role'],
     summary='Check User Roles (Any)',
     description='Check if the current user has any of the specified roles (JWT authentication required)',
     request={
@@ -621,7 +621,7 @@ def check_any_role_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['Check All Roles'],
     summary='Check User Roles (All)',
     description='Check if the current user has all of the specified roles (JWT authentication required)',
     request={
@@ -725,7 +725,7 @@ def check_all_roles_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['Get User Roles'],
     summary='Get User Roles',
     description='Get all roles for the current user (JWT authentication required)',
     responses={
@@ -796,7 +796,7 @@ def get_user_roles_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['Update Profile'],
     summary='Update User Profile',
     description='Update current user profile information (JWT authentication required)',
     request={
@@ -975,7 +975,7 @@ def update_profile_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['Delete Profile'],
     summary='Delete User Profile',
     description='Delete current user profile and account (JWT authentication required)',
     responses={
@@ -1068,7 +1068,7 @@ def delete_profile_view(request):
 
 
 @extend_schema(
-    tags=['Users'],
+    tags=['User Profile by Username'],
     summary='Get User Profile by Username (Admin Only)',
     description='Get full profile information for any user by username. Requires the user to have the "admin" role in roles_storage (JWT authentication required).',
     parameters=[

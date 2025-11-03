@@ -62,7 +62,7 @@ GOOGLE_USER_INFO_URL = GOOGLE_CONFIG.get('USER_INFO_URL', 'https://www.googleapi
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Google Login'],
     summary='Google OAuth Login',
     description='Redirects to Google OAuth login page',
     parameters=[
@@ -132,7 +132,7 @@ def google_login_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Google Auth Callback'],
     summary='Google OAuth Callback',
     description='Handle Google OAuth callback and authenticate user. Supports both GET (browser redirect from Google) and POST (direct API call).',
     methods=['GET', 'POST'],
@@ -383,7 +383,7 @@ def google_auth_callback_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Google Me'],
     summary='Get Current User Info',
     description='Get current authenticated user information (requires Bearer token or cookie)',
     responses={
@@ -458,7 +458,7 @@ def google_me_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Google Logout'],
     summary='Logout',
     description='Logout current user and invalidate tokens',
     request={
@@ -557,7 +557,7 @@ def google_logout_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Google Refresh'],
     summary='Refresh Token',
     description='Refresh JWT access token using refresh token',
     request={
@@ -680,7 +680,7 @@ def google_refresh_view(request):
 
 
 @extend_schema(
-    tags=['Authentication'],
+    tags=['Google Verify'],
     summary='Verify Google Token',
     description='Verify Google OAuth access token validity by checking with Google tokeninfo endpoint',
     request={
