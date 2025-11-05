@@ -27,7 +27,7 @@ logger = logging.getLogger('codea_auth_server')
 
 
 @extend_schema(
-    tags=['Health Check'],
+    tags=['Health'],
     summary='Basic Health Check',
     description='Simple health check endpoint to verify the server is running',
     responses={
@@ -77,7 +77,7 @@ def health_check_view(request):
 
 
 @extend_schema(
-    tags=['Detailed Health'],
+    tags=['Health'],
     summary='Detailed Health Check',
     description='Comprehensive health check with system metrics, database status, and cache status',
     responses={
@@ -195,7 +195,7 @@ def detailed_health_view(request):
 
 
 @extend_schema(
-    tags=['System Metrics'],
+    tags=['Health'],
     summary='System Metrics',
     description='Detailed system metrics for monitoring and performance analysis',
     responses={
@@ -283,7 +283,7 @@ def metrics_view(request):
 
 
 @extend_schema(
-    tags=['Application Status'],
+    tags=['Health'],
     summary='Application Status',
     description='Application status and configuration information',
     responses={
