@@ -20,14 +20,31 @@ class OptionalJWTAuthentication(JWTAuthentication):
     
     def authenticate(self, request):
         """
-        Override authenticate to not raise exceptions for health endpoints.
+        Override authenticate to not raise exceptions for public endpoints.
         """
         # List of paths that should bypass authentication errors
+        # These are public endpoints that don't require authentication
         bypass_paths = [
+            # Health check endpoints
             '/api/health/',
             '/api/health/detailed/',
             '/api/health/metrics/',
             '/api/health/status/',
+            # Authentication endpoints (login, register, etc.)
+            '/api/auth/jwt/login/',
+            '/api/auth/jwt/register/',
+            '/api/auth/jwt/refresh/',
+            '/api/auth/jwt/verify/',
+            '/api/auth/google/login/',
+            '/api/auth/google/auth/',
+            '/api/auth/google/verify/',
+            # OAuth2 endpoints
+            '/api/oauth2/authorize/',
+            '/api/oauth2/token/',
+            # API documentation endpoints
+            '/schema/',
+            '/docs/',
+            '/redoc/',
         ]
         
         # Check if current path should bypass authentication
@@ -36,7 +53,7 @@ class OptionalJWTAuthentication(JWTAuthentication):
             try:
                 return super().authenticate(request)
             except Exception:
-                # Return None to allow anonymous access for health endpoints
+                # Return None to allow anonymous access for public endpoints
                 return None
         
         # For other endpoints, use normal authentication
@@ -45,19 +62,36 @@ class OptionalJWTAuthentication(JWTAuthentication):
 
 class OptionalSessionAuthentication(SessionAuthentication):
     """
-    Custom Session authentication that doesn't raise exceptions for health endpoints.
+    Custom Session authentication that doesn't raise exceptions for public endpoints.
     """
     
     def authenticate(self, request):
         """
-        Override authenticate to not raise exceptions for health endpoints.
+        Override authenticate to not raise exceptions for public endpoints.
         """
         # List of paths that should bypass authentication errors
+        # These are public endpoints that don't require authentication
         bypass_paths = [
+            # Health check endpoints
             '/api/health/',
             '/api/health/detailed/',
             '/api/health/metrics/',
             '/api/health/status/',
+            # Authentication endpoints (login, register, etc.)
+            '/api/auth/jwt/login/',
+            '/api/auth/jwt/register/',
+            '/api/auth/jwt/refresh/',
+            '/api/auth/jwt/verify/',
+            '/api/auth/google/login/',
+            '/api/auth/google/auth/',
+            '/api/auth/google/verify/',
+            # OAuth2 endpoints
+            '/api/oauth2/authorize/',
+            '/api/oauth2/token/',
+            # API documentation endpoints
+            '/schema/',
+            '/docs/',
+            '/redoc/',
         ]
         
         # Check if current path should bypass authentication
@@ -66,7 +100,7 @@ class OptionalSessionAuthentication(SessionAuthentication):
             try:
                 return super().authenticate(request)
             except Exception:
-                # Return None to allow anonymous access
+                # Return None to allow anonymous access for public endpoints
                 return None
         
         # For other endpoints, use normal authentication
