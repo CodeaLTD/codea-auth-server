@@ -35,8 +35,8 @@ class OptionalJWTAuthentication(JWTAuthentication):
             # Try to authenticate, but don't raise exceptions
             try:
                 return super().authenticate(request)
-            except (InvalidToken, AuthenticationFailed):
-                # Return None to allow anonymous access
+            except Exception:
+                # Return None to allow anonymous access for health endpoints
                 return None
         
         # For other endpoints, use normal authentication
