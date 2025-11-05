@@ -23,8 +23,7 @@ urlpatterns = [
     path('auth/jwt/verify/', auth_views.jwt_verify_view, name='api_jwt_verify'),
     path('auth/jwt/me/', auth_views.jwt_me_view, name='api_jwt_me'),
     path('auth/jwt/logout/', auth_views.jwt_logout_view, name='api_jwt_logout'),
-    path('auth/jwt/register/', user_views.register_view, name='api_jwt_register'),
-    
+
     # Legacy Authentication endpoints (deprecated)
     # path('auth/login/', auth_views.jwt_login_view, name='api_login'),
     # path('auth/logout/', auth_views., name='api_logout'),
@@ -32,6 +31,7 @@ urlpatterns = [
     # path('auth/change-password/', auth_views.change_password_view, name='api_change_password'),
     #
     # User management endpoints
+    path('users/profile/register/', user_views.register_view, name='api_register'),
     path('users/profile/', user_views.profile_view, name='api_profile'),
     path('users/profile/by-username/', user_views.get_user_profile_by_username_view, name='api_profile_by_username'),
     path('users/profile/update/', user_views.update_profile_view, name='api_update_profile'),
