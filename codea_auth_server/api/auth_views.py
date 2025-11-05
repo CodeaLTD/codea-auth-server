@@ -28,7 +28,7 @@ logger = logging.getLogger('codea_auth_server')
 
 
 @extend_schema(
-    tags=['JWT Login'],
+    tags=['JWT authentication'],
     summary='Login',
     description='Authenticate user with username and password and return JWT tokens',
     request={
@@ -177,7 +177,7 @@ def jwt_login_view(request):
 
 
 @extend_schema(
-    tags=['JWT Refresh'],
+    tags=['JWT authentication'],
     summary='JWT Token Refresh',
     description='Refresh JWT access token using refresh token',
     request={
@@ -281,7 +281,7 @@ def jwt_refresh_view(request):
 
 
 @extend_schema(
-    tags=['JWT Verify'],
+    tags=['JWT authentication'],
     summary='JWT Token Verify',
     description='Verify JWT access token validity',
     request={
@@ -397,7 +397,7 @@ def jwt_verify_view(request):
 
 
 @extend_schema(
-    tags=['JWT Me'],
+    tags=['JWT authentication'],
     summary='Get Current User (Who Am I)',
     description='Get current authenticated user information based on JWT token',
     responses={
@@ -480,7 +480,7 @@ def jwt_me_view(request):
 
 
 @extend_schema(
-    tags=['JWT Logout'],
+    tags=['JWT authentication'],
     summary='Logout',
     description='Logout user and blacklist refresh token',
     request={
@@ -674,7 +674,7 @@ def jwt_logout_view(request):
 #
 
 @extend_schema(
-    tags=['Change Password'],
+    tags=['JWT authentication'],
     summary='Change Password',
     description='Change user password (JWT authentication required)',
     request={

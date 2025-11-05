@@ -118,7 +118,7 @@ def validate_authorization_code(code, client_id, redirect_uri):
 
 
 @extend_schema(
-    tags=['OAuth 2.0 Authorize'],
+    tags=['OAuth 2.0'],
     summary='OAuth 2.0 Authorization Endpoint',
     description='''
     OAuth 2.0 authorization endpoint (browser-facing). Authenticates the user and obtains authorization.
@@ -343,7 +343,7 @@ def oauth2_authorize_view(request):
 
 
 @extend_schema(
-    tags=['OAuth 2.0 Token'],
+    tags=['OAuth 2.0'],
     summary='OAuth 2.0 Token Endpoint',
     description='''
     OAuth 2.0 token endpoint (server-to-server). Exchanges authorization codes or refresh tokens for access tokens.
@@ -716,7 +716,7 @@ def handle_client_credentials_grant(request, client_id):
 
 
 @extend_schema(
-    tags=['OAuth 2.0 UserInfo'],
+    tags=['OAuth 2.0'],
     summary='OAuth 2.0 UserInfo Endpoint',
     description='''
     OAuth 2.0 UserInfo endpoint (resource API). Returns information about the authenticated user.
