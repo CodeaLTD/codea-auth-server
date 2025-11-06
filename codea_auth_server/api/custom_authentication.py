@@ -34,7 +34,7 @@ class OptionalJWTAuthentication(JWTAuthentication):
             '/api/auth/jwt/login/',
             '/api/auth/jwt/register/',
             '/api/auth/jwt/refresh/',
-            '/api/auth/jwt/verify/',
+            '/api/auth/jwt/logout/',
             '/api/auth/google/login/',
             '/api/auth/google/auth/',
             '/api/auth/google/verify/',

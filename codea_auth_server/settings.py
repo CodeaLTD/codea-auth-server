@@ -458,7 +458,7 @@ SPECTACULAR_SETTINGS = {
         'hideHostname': False,
     },
     'SERVERS': [
-        {'url': 'http://localhost:8000', 'description': 'Development server'},
+        {'url': os.environ.get('API_BASE_URL', 'http://localhost:8000'), 'description': 'API Server'},
     ],
     # Security scheme for JWT Bearer token authentication
     'SECURITY': [

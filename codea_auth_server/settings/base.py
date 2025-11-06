@@ -278,7 +278,7 @@ SPECTACULAR_SETTINGS = {
     'SCHEMA_PATH_PREFIX': '/api/',
     'TAGS': [
         {'name': 'Users', 'description': 'User management endpoints'},
-        {'name': 'Health & Monitoring', 'description': 'System health and monitoring endpoints'},
+        {'name': 'Health', 'description': 'System health endpoints'},
         {'name': 'JWT authentication', 'description': 'JWT authentication endpoints'},
         {'name': 'Google Authentication', 'description': 'Google OAuth authentication endpoints'},
         {'name': 'OAuth 2.0', 'description': 'OAuth 2.0 protocol endpoints'},
@@ -288,6 +288,7 @@ SPECTACULAR_SETTINGS = {
         'deepLinking': True,
         'persistAuthorization': True,
         'displayOperationId': True,
+        'filter': True,  # Enable search/filter
     },
     'REDOC_UI_SETTINGS': {
         'hideDownloadButton': False,
@@ -296,5 +297,21 @@ SPECTACULAR_SETTINGS = {
     'SERVERS': [
         {'url': os.environ.get('API_BASE_URL', 'http://localhost:8000'), 'description': 'API Server'},
     ],
+    # Security scheme for JWT Bearer token authentication
+    'SECURITY': [
+        {
+            'BearerAuth': []
+        }
+    ],
+    'COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+                'description': 'Enter your JWT token (without "Bearer" prefix)'
+            }
+        }
+    },
 }
 
