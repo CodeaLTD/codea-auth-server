@@ -143,4 +143,5 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+run_dev.py
 client_secret_339914988151-eodhtv4o92ru5a7qm8gm053obrr1a0m3.apps.googleusercontent.com.json
