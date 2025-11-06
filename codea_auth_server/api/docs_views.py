@@ -17,6 +17,7 @@ from codea_auth_server.logging_utils import log_request_info, log_message, log_e
 
 # Get logger for this module
 logger = logging.getLogger('codea_auth_server')
+
 #
 #
 # class CustomSpectacularAPIView(SpectacularAPIView):
