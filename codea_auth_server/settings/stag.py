@@ -80,6 +80,7 @@ if database_url:
                 'PORT': str(db_port),
                 'OPTIONS': {
                     'connect_timeout': 10,
+                    'options': '-c search_path=auth_schema,public',
                 },
             }
         }
@@ -98,6 +99,7 @@ if database_url:
                 'PORT': os.environ.get('DB_PORT', '5432'),
                 'OPTIONS': {
                     'connect_timeout': 10,
+                    'options': '-c search_path=auth_schema,public',
                 },
             }
         }
