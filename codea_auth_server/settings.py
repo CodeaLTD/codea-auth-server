@@ -349,8 +349,8 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG  # Only allow all origins in development
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        'codea_auth_server.api.custom_authentication.OptionalJWTAuthentication',
+        'codea_auth_server.api.custom_authentication.OptionalSessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -440,9 +440,12 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
     'SCHEMA_PATH_PREFIX': '/api/',
     'TAGS': [
-        {'name': 'Authentication', 'description': 'User authentication endpoints'},
         {'name': 'Users', 'description': 'User management endpoints'},
         {'name': 'Health', 'description': 'System health and monitoring endpoints'},
+        {'name': 'JWT authentication', 'description': 'JWT authentication endpoints'},
+        {'name': 'Google Authentication', 'description': 'Google OAuth authentication endpoints'},
+        {'name': 'OAuth 2.0', 'description': 'OAuth 2.0 protocol endpoints'},
+        {'name': 'API Rate Limiter', 'description': 'API rate limiting status'},
     ],
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
