@@ -29,7 +29,7 @@ logger = logging.getLogger('codea_auth_server')
 @extend_schema(
     tags=['Health'],
     summary='Basic Health Check',
-    description='Simple health check endpoint to verify the server is running',
+    description='Simple health check endpoint to verify the server is running. Optimized for uptime monitors.',
     responses={
         200: {
             'description': 'Server is healthy',
@@ -42,16 +42,6 @@ logger = logging.getLogger('codea_auth_server')
                     }
                 }
             }
-        },
-        500: {
-            'description': 'Server error',
-            'content': {
-                'application/json': {
-                    'example': {
-                        'error': 'Health check failed'
-                    }
-                }
-            }
         }
     }
 )
@@ -59,21 +49,15 @@ logger = logging.getLogger('codea_auth_server')
 @permission_classes([AllowAny])
 def health_check_view(request):
     """
-    Basic health check endpoint.
+    Basic health check endpoint optimized for uptime monitors.
+    Lightweight, fast, and reliable - no heavy operations or logging.
     """
-    try:
-        log_message("Health check requested", "INFO")
-        log_request_info(request)
-        
-        return Response({
-            'status': 'healthy',
-            'message': 'Auth server is running',
-            'timestamp': time.time()
-        })
-        
-    except Exception as e:
-        log_error(e, 'health_check_view')
-        return Response({'error': 'Health check failed'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    # Minimal response - no logging to ensure fast response for uptime monitors
+    return Response({
+        'status': 'ok',
+        'message': 'Auth server is running',
+        'timestamp': time.time()
+    }, status=status.HTTP_200_OK)
 
 
 @extend_schema(
