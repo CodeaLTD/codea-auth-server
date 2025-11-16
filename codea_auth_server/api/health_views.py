@@ -53,11 +53,15 @@ def health_check_view(request):
     Lightweight, fast, and reliable - no heavy operations or logging.
     """
     # Minimal response - no logging to ensure fast response for uptime monitors
-    return Response({
+    response = Response({
         'status': 'ok',
         'message': 'Auth server is running',
         'timestamp': time.time()
     }, status=status.HTTP_200_OK)
+    
+    # Explicitly set content type to JSON to handle monitors with HTML Accept headers
+    response['Content-Type'] = 'application/json'
+    return response
 
 
 @extend_schema(
