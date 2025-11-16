@@ -292,3 +292,9 @@ Alternatively, you can use a `.env` file with Docker Compose (it automatically l
 -Avoid using the Render database superuser credentials for your Django app — use the newly created one instead.
 -Always use SSL mode = require when connecting externally.
 -Never expose passwords in code or logs.
+
+Note on Cache
+Since we have a single instance in production, the default Django in-memory cache (locmem) is sufficient for rate limiting. No additional cache configuration is needed.
+
+Future Consideration
+If we  scale to multiple instances behind a load balancer, we’ll need a shared cache (Redis/Memcached) so rate limiting works across instances. For a single instance, the current setup is fine.

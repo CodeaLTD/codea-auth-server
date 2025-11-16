@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 import logging
+import math
 import time
 from django.core.cache import cache
 from django.conf import settings
@@ -153,10 +154,13 @@ def apiLimiter(request):
             remaining = max(0, active_limit - request_count)
             
             # Calculate reset time (next period boundary)
+            # Ensure we always round up to the next period boundary
             if active_period_seconds == 60:
-                reset_at = current_time + (60 - (current_time % 60))
+                # For per-minute: round up to next minute boundary
+                reset_at = math.ceil(current_time / 60) * 60
             else:
-                reset_at = current_time + (3600 - (current_time % 3600))
+                # For per-hour: round up to next hour boundary
+                reset_at = math.ceil(current_time / 3600) * 3600
             
             current_usage = {
                 'requests': request_count,
@@ -182,7 +186,7 @@ def apiLimiter(request):
                 'value': identifier_value
             },
             'timestamp': time.time(),
-            'note': 'Rate limiting configuration is handled via REST Framework throttling classes' if rate_limit_enabled else 'Rate limiting is not currently configured'
+            'note': 'Rate limiting is enforced using Django REST Framework throttle classes. Limits apply automatically to all API requests.' if rate_limit_enabled else 'Rate limiting is not currently configured'
         }
         
         log_message(f"API rate limiter status provided: enabled={rate_limit_enabled}", "INFO")
